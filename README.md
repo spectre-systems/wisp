@@ -6,7 +6,7 @@ Subagentes efêmeros em outras máquinas, com **Claude Code** ou **Codex**. Cada
 container Docker novo num host via SSH, roda o agente com o seu login e apaga o container quando o
 resultado é recolhido. Nada fica rodando entre uma tarefa e outra.
 
-Só biblioteca padrão do Python, sem dependências.
+Roda em **macOS e Linux** (controlador e host). Só biblioteca padrão do Python, sem dependências.
 
 ## O problema que ele resolve
 
@@ -64,13 +64,19 @@ Todo o contexto vai na missão. Ele tem internet.
 
 ## Dashboard
 
-`wisp dash` abre uma página local (só `127.0.0.1`, nada exposto na rede) que atualiza a cada 5 s:
+`wisp dash` abre uma página local (só `127.0.0.1`, nada exposto na rede) que atualiza a cada 5 s.
+Num servidor Linux sem tela, rode lá e abra de outro computador com
+`ssh -L 7717:127.0.0.1:7717 servidor`.
+
+Mostra:
 
 - RAM da máquina: quanto é de outros processos, quanto é dos agentes, quanto está livre;
 - cota do wisp reservada vs. máximo do host;
 - cada agente com motor, idade, RAM real, teto, CPU e um botão para matar.
 
 ## Instalação
+
+Mesmo passo a passo no macOS e no Linux:
 
 ```bash
 git clone git@github.com:spectre-systems/wisp.git ~/Projects/wisp
@@ -115,12 +121,17 @@ approval_mode = "approve"
 
 Pronto: `wisp ls`, `wisp dash` e `wisp spawn` passam a usar o host. Para forçar: `--host outro-pc`.
 
+**Controlador e host na mesma máquina Linux?** Use `"ssh": "local"`: os comandos rodam direto,
+sem SSH para si mesma.
+
 | Campo | Significado |
 |---|---|
-| `ssh` | alias do `~/.ssh/config` |
+| `ssh` | alias do `~/.ssh/config`, ou `local` para esta própria máquina |
 | `max_ram_gb` | soma máxima dos tetos dos agentes nesse host |
 | `keep_free_gb` | RAM que precisa continuar livre; se não sobrar, o wisp não sobe agente ali |
 | `cpus_per_agent` | limite de CPU de cada container |
+
+A config fica em `~/.wisp/`; para usar outra pasta (outro perfil, testes), exporte `WISP_HOME`.
 
 ## FAQ
 
@@ -150,7 +161,7 @@ enquanto está aberta, mesmo sem container. Linux é o host ideal; Mac/Windows s
 | Máquina | Hoje |
 |---|---|
 | Linux x86_64 | funciona |
-| Linux ARM (Raspberry Pi, servidor ARM) | ainda não: o Dockerfile baixa o Codex de x86_64 |
+| Linux ARM64 (Raspberry Pi 4/5, servidor ARM) | funciona: o Dockerfile escolhe o Codex pela arquitetura |
 | Mac | ainda não: a leitura de RAM usa `/proc/meminfo` |
 | Windows | via WSL2 com Docker e sshd |
 | usuário sem root | funciona se estiver no grupo `docker` |
@@ -161,8 +172,7 @@ O controlador precisa alcançar o host por SSH. Se não alcança, Tailscale reso
 
 Ele vira mais um **controlador**: clone o repo, copie o `hosts.json`, tenha SSH até os hosts e
 os logins do Claude/Codex. Os controladores não conversam entre si, mas enxergam os mesmos
-containers, porque o estado está nos rótulos do Docker de cada host. Hoje o controlador precisa ser
-um Mac para o motor `claude` (o token vem do Keychain) ou exportar `CLAUDE_CODE_OAUTH_TOKEN`.
+containers, porque o estado está nos rótulos do Docker de cada host. Pode ser Mac ou Linux.
 
 ### O agente vê meus arquivos ou minhas chaves?
 
@@ -180,7 +190,8 @@ Só o access token sai do controlador, **nunca o refresh token**: o container n�
 nem rotacionar a sessão, então seu login nunca cai. Vai pelo stdin do SSH para não aparecer em
 `argv`, e o `timeout` da missão é cortado para caber na validade do token.
 
-- **claude**: `$CLAUDE_CODE_OAUTH_TOKEN`, ou o login do Claude Code no Keychain.
+- **claude**: `$CLAUDE_CODE_OAUTH_TOKEN`, ou o login do Claude Code: Keychain no macOS,
+  `~/.claude/.credentials.json` no Linux (`$CLAUDE_CONFIG_DIR` se definido).
 - **codex**: `$OPENAI_API_KEY`, ou o login do ChatGPT em `~/.codex/auth.json` (`$CODEX_HOME`); o
   container recebe uma cópia desse arquivo sem o `refresh_token`. O access token vale ~10 dias; se
   vencer, abra o Codex uma vez no controlador para ele renovar.

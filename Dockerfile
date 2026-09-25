@@ -8,7 +8,8 @@ RUN HOME=/opt/claude bash -c "curl -fsSL https://claude.ai/install.sh | bash" \
 # codex-code-mode-host ao lado do binário. A parte de voz fica de fora.
 ARG CODEX_VERSION=0.157.0
 RUN mkdir -p /opt/codex \
- && curl -fsSL "https://github.com/openai/codex/releases/download/rust-v${CODEX_VERSION}/codex-package-x86_64-unknown-linux-musl.tar.gz" \
+ && ARCH="$(uname -m | sed 's/arm64/aarch64/')" \
+ && curl -fsSL "https://github.com/openai/codex/releases/download/rust-v${CODEX_VERSION}/codex-package-${ARCH}-unknown-linux-musl.tar.gz" \
     | tar -xz -C /opt/codex --exclude='codex-resources/voice' \
  && ln -s /opt/codex/bin/codex /usr/local/bin/codex \
  && codex --version

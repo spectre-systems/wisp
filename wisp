@@ -15,28 +15,36 @@ Hosts em ~/.wisp/hosts.json. Credenciais saem deste Mac só como access token, s
   claude  $CLAUDE_CODE_OAUTH_TOKEN ou o login do Claude Code no Keychain
   codex   o login do Codex em ~/.codex/auth.json ($CODEX_HOME), ou $OPENAI_API_KEY
 """
-import argparse, json, os, secrets, shlex, subprocess, sys, time
+import argparse, json, os, secrets, shlex, shutil, subprocess, sys, time
 from pathlib import Path
 
-HOME = Path.home() / ".wisp"
+HOME = Path(os.environ.get("WISP_HOME", Path.home() / ".wisp"))
 HOSTS = json.loads((HOME / "hosts.json").read_text())
 IMAGE = "wisp-agent"
 
 
 def ssh(host, cmd, stdin=None, check=True):
-    r = subprocess.run(["ssh", "-o", "ConnectTimeout=8", HOSTS[host]["ssh"], cmd],
-                       input=stdin, capture_output=True, text=True)
+    """Roda `cmd` no host. "ssh": "local" roda nesta máquina mesmo (controlador = host)."""
+    target = HOSTS[host]["ssh"]
+    argv = ["sh", "-c", cmd] if target == "local" else ["ssh", "-o", "ConnectTimeout=8", target, cmd]
+    r = subprocess.run(argv, input=stdin, capture_output=True, text=True)
     if check and r.returncode != 0:
         sys.exit(f"[{host}] {r.stderr.strip() or r.stdout.strip()}")
     return r
 
 
-def _mac_login():
-    """Access token do login do Claude Code neste Mac (sem o refresh token)."""
-    r = subprocess.run(["security", "find-generic-password", "-s", "Claude Code-credentials", "-w"],
-                       capture_output=True, text=True)
+def _claude_login():
+    """Access token do login local do Claude Code (sem o refresh token).
+    macOS guarda no Keychain; Linux (e Mac sem Keychain) em ~/.claude/.credentials.json."""
+    raw = ""
+    if sys.platform == "darwin":
+        raw = subprocess.run(["security", "find-generic-password", "-s", "Claude Code-credentials", "-w"],
+                             capture_output=True, text=True).stdout
+    if not raw.strip():
+        f = Path(os.environ.get("CLAUDE_CONFIG_DIR", Path.home() / ".claude")) / ".credentials.json"
+        raw = f.read_text() if f.exists() else ""
     try:
-        o = json.loads(r.stdout)["claudeAiOauth"]
+        o = json.loads(raw)["claudeAiOauth"]
         return o["accessToken"], o["expiresAt"] / 1000
     except (ValueError, KeyError):
         return None, 0
@@ -48,13 +56,15 @@ def token(need_secs):
     t = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN")
     if t:
         return t, None
-    t, exp = _mac_login()
-    if t and exp - time.time() < 600:
+    t, exp = _claude_login()
+    claude = shutil.which("claude") or str(Path.home() / ".local/bin/claude")
+    if t and exp - time.time() < 600 and os.path.exists(claude):
         # quase vencendo: uma chamada mínima faz o Claude Code local renovar
-        subprocess.run(["claude", "-p", "ok", "--max-turns", "1"], capture_output=True, timeout=120)
-        t, exp = _mac_login()
+        subprocess.run([claude, "-p", "ok", "--max-turns", "1"], capture_output=True, timeout=120)
+        t, exp = _claude_login()
     if not t:
-        sys.exit("sem login do Claude Code neste Mac (rode `claude` e faça login)")
+        sys.exit("sem login do Claude Code nesta máquina (rode `claude` e faça login, "
+                 "ou exporte CLAUDE_CODE_OAUTH_TOKEN)")
     left = exp - time.time()
     if left < 600:
         sys.exit("o token local não renovou; abra o Claude Code uma vez e tente de novo")
@@ -77,7 +87,7 @@ def codex_auth():
     try:
         d = json.loads(path.read_text())
     except (OSError, ValueError):
-        sys.exit("sem login do Codex neste Mac (rode `codex login`)")
+        sys.exit("sem login do Codex nesta máquina (rode `codex login`)")
     if d.get("OPENAI_API_KEY"):
         return json.dumps({"OPENAI_API_KEY": d["OPENAI_API_KEY"]}), None
     t = d.get("tokens") or {}
@@ -86,7 +96,7 @@ def codex_auth():
     except (KeyError, IndexError, ValueError):
         sys.exit(f"{path}: formato de login do Codex desconhecido")
     if left < 600:
-        sys.exit("o token do Codex venceu; abra o Codex uma vez neste Mac e tente de novo")
+        sys.exit("o token do Codex venceu; abra o Codex uma vez nesta máquina e tente de novo")
     now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())   # evita refresh proativo lá dentro
     slim = {"auth_mode": d.get("auth_mode", "chatgpt"), "OPENAI_API_KEY": None, "last_refresh": now,
             "tokens": {**{k: t.get(k) for k in ("id_token", "access_token", "account_id")}, "refresh_token": ""}}
@@ -306,7 +316,8 @@ def cmd_dash(a):
 
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), H)     # só loopback: nada exposto na rede
     origin = f"http://127.0.0.1:{a.port}"
-    print(f"wisp dash em {origin}  (Ctrl+C para sair)")
+    print(f"wisp dash em {origin}  (Ctrl+C para sair)", flush=True)
+    print(f"  numa máquina sem tela? do seu computador: ssh -L {a.port}:127.0.0.1:{a.port} <host> e abra {origin}", flush=True)
     if not a.no_open:
         threading.Timer(0.3, webbrowser.open, [origin]).start()
     try:

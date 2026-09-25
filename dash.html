@@ -71,7 +71,7 @@ function hostCard(h) {
   const running = h.agents.filter(a => a.state === "running");
   const rows = h.agents.map(a => `<tr>
       <td><span class="dot" style="background:var(${a.state === "running" ? "--ok" : "--other"})"></span><code>${esc(a.id)}</code></td>
-      <td>${esc(a.state)}</td><td>${esc(a.age)}</td>
+      <td>${esc(a.engine)}</td><td>${esc(a.state)}</td><td>${esc(a.age)}</td>
       <td class="num">${a.state === "running" ? a.used_mib.toLocaleString("pt-BR") + " MB" : "—"}</td>
       <td class="num">${a.ram_gb} GB</td><td class="num">${esc(a.cpu || "—")}</td>
       <td><button data-host="${esc(h.host)}" data-id="${esc(a.id)}">matar</button></td></tr>`).join("");
@@ -91,7 +91,7 @@ function hostCard(h) {
     <div class="label"><span>Cota wisp</span><span class="muted">${h.quota_used_gb} de ${h.max_ram_gb} GB reservados</span></div>
     <div class="bar"><span style="width:${pct(h.quota_used_gb, h.max_ram_gb)};background:var(--accent)"></span></div>
     ${h.agents.length ? `<div class="wrap"><table>
-      <tr><th>agente</th><th>estado</th><th>idade</th><th class="num">RAM real</th><th class="num">teto</th><th class="num">CPU</th><th></th></tr>
+      <tr><th>agente</th><th>motor</th><th>estado</th><th>idade</th><th class="num">RAM real</th><th class="num">teto</th><th class="num">CPU</th><th></th></tr>
       ${rows}</table></div>` : `<div class="empty">Nenhum agente rodando.</div>`}
   </section>`;
 }

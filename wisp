@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""wisp: subagentes Claude efêmeros numa lista de máquinas via SSH + Docker.
+"""wisp: subagentes efêmeros (Claude Code ou Codex) numa lista de máquinas via SSH + Docker.
 
-  wisp spawn "missão" [--ram 2] [--host optimus] [--turns 20] [--timeout 1800]
+  wisp spawn "missão" [--engine claude|codex] [--model M] [--ram 2] [--host optimus]
+                      [--turns 20] [--timeout 1800]
   wisp wait ID          espera terminar, imprime o JSON e apaga o container
   wisp result ID        igual ao wait, mas não espera (diz se ainda está rodando)
   wisp status ID
@@ -10,8 +11,9 @@
   wisp gc               apaga containers terminados esquecidos
   wisp dash [--port 7717]   painel no navegador: RAM por host, cota, agentes vivos
 
-Hosts em ~/.wisp/hosts.json. Token: $CLAUDE_CODE_OAUTH_TOKEN ou o login
-do Claude Code guardado no Keychain deste Mac.
+Hosts em ~/.wisp/hosts.json. Credenciais saem deste Mac só como access token, sem refresh:
+  claude  $CLAUDE_CODE_OAUTH_TOKEN ou o login do Claude Code no Keychain
+  codex   o login do Codex em ~/.codex/auth.json ($CODEX_HOME), ou $OPENAI_API_KEY
 """
 import argparse, json, os, secrets, shlex, subprocess, sys, time
 from pathlib import Path
@@ -59,6 +61,52 @@ def token(need_secs):
     return t, left
 
 
+def _jwt_exp(tok):
+    import base64
+    p = tok.split(".")[1]
+    return json.loads(base64.urlsafe_b64decode(p + "=" * (-len(p) % 4)))["exp"]
+
+
+def codex_auth():
+    """(auth.json para o container em uma linha, segundos de validade). Sai sem o
+    refresh token: o container não rotaciona a sessão, então o login daqui continua valendo."""
+    key = os.environ.get("OPENAI_API_KEY")
+    if key:
+        return json.dumps({"OPENAI_API_KEY": key}), None
+    path = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "auth.json"
+    try:
+        d = json.loads(path.read_text())
+    except (OSError, ValueError):
+        sys.exit("sem login do Codex neste Mac (rode `codex login`)")
+    if d.get("OPENAI_API_KEY"):
+        return json.dumps({"OPENAI_API_KEY": d["OPENAI_API_KEY"]}), None
+    t = d.get("tokens") or {}
+    try:
+        left = _jwt_exp(t["access_token"]) - time.time()
+    except (KeyError, IndexError, ValueError):
+        sys.exit(f"{path}: formato de login do Codex desconhecido")
+    if left < 600:
+        sys.exit("o token do Codex venceu; abra o Codex uma vez neste Mac e tente de novo")
+    now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())   # evita refresh proativo lá dentro
+    slim = {"auth_mode": d.get("auth_mode", "chatgpt"), "OPENAI_API_KEY": None, "last_refresh": now,
+            "tokens": {**{k: t.get(k) for k in ("id_token", "access_token", "account_id")}, "refresh_token": ""}}
+    return json.dumps(slim), left
+
+
+ENGINES = {
+    # env que recebe a credencial (vem pelo stdin do ssh) e o comando dentro do container
+    "claude": ("CLAUDE_CODE_OAUTH_TOKEN", token,
+               lambda a: f"timeout {a.timeout} claude -p \"$MISSAO\" --output-format json "
+                         f"--max-turns {a.turns} --permission-mode bypassPermissions"
+                         + (f" --model {shlex.quote(a.model)}" if a.model else "")),
+    "codex": ("CODEX_AUTH", lambda _: codex_auth(),
+              lambda a: "umask 077; mkdir -p ~/.codex && printf '%s' \"$CODEX_AUTH\" > ~/.codex/auth.json && "
+                        f"timeout {a.timeout} codex exec --json --skip-git-repo-check --ephemeral "
+                        "--dangerously-bypass-approvals-and-sandbox"   # o container já é a sandbox
+                        + (f" -m {shlex.quote(a.model)}" if a.model else "") + " \"$MISSAO\" </dev/null"),
+}
+
+
 def capacity(host):
     """(GB livres na cota do wisp, GB livres de verdade na máquina)"""
     r = ssh(host, "awk '/MemAvailable/{print int($2/1048576)}' /proc/meminfo; "
@@ -98,28 +146,46 @@ def cmd_spawn(a):
     if not best:
         sys.exit(f"sem {a.ram} GB livres agora em {', '.join(hosts)} (veja `wisp ls`)")
     h = best[0]
-    tok, left = token(a.timeout)
+    env, get_cred, command = ENGINES[a.engine]
+    tok, left = get_cred(a.timeout)
     if left is not None and left - 300 < a.timeout:
         a.timeout = int(left - 300)                    # não passar da validade do token
         print(f"timeout reduzido para {a.timeout}s (validade do token)", file=sys.stderr)
     gc(h)
     agent_id = "wp-" + secrets.token_hex(3)
     cpus = HOSTS[h].get("cpus_per_agent", 1)
-    inner = (f"timeout {a.timeout} claude -p \"$MISSAO\" --output-format json "
-             f"--max-turns {a.turns} --permission-mode bypassPermissions")
     run = ["docker", "run", "-d", "--name", agent_id,
-           "--label", "wisp", "--label", f"wisp.ram={a.ram}",
+           "--label", "wisp", "--label", f"wisp.ram={a.ram}", "--label", f"wisp.engine={a.engine}",
            "--memory", f"{a.ram}g", "--memory-swap", f"{a.ram}g", "--cpus", str(cpus),
            "--pids-limit", "512", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
            "--read-only", "--tmpfs", "/tmp:size=512m,mode=1777",
            "--tmpfs", f"/home/agent:size={max(1, a.ram // 2)}g,mode=1777",
            "--log-opt", "max-size=5m", "--log-opt", "max-file=1",
-           "-e", "CLAUDE_CODE_OAUTH_TOKEN", "-e", f"MISSAO={a.mission}",
-           IMAGE, "sh", "-c", inner]
-    # o token vai pelo stdin do ssh: não aparece em argv nem no histórico
-    remote = 'read -r T; export CLAUDE_CODE_OAUTH_TOKEN="$T"; ' + shlex.join(run)
+           "-e", env, "-e", f"MISSAO={a.mission}",
+           IMAGE, "sh", "-c", command(a)]
+    # a credencial vai pelo stdin do ssh: não aparece em argv nem no histórico
+    remote = f'read -r T; export {env}="$T"; ' + shlex.join(run)
     ssh(h, remote, stdin=tok + "\n")
-    print(json.dumps({"id": agent_id, "host": h, "ram_gb": a.ram}))
+    print(json.dumps({"id": agent_id, "host": h, "ram_gb": a.ram, "engine": a.engine}))
+
+
+def parse_codex(lines):
+    """Eventos JSONL do `codex exec --json` -> mesmo formato do resultado do Claude."""
+    res = {"engine": "codex", "result": ""}
+    for line in lines:
+        try:
+            ev = json.loads(line)
+        except ValueError:
+            continue
+        item = ev.get("item") or {}
+        if ev.get("type") == "item.completed" and item.get("type") == "agent_message":
+            res["result"] = item.get("text", "")        # a última mensagem é a resposta
+        elif ev.get("type") == "turn.completed":
+            res["usage"] = ev.get("usage")
+        elif ev.get("type") in ("turn.failed", "error"):
+            res["is_error"] = True
+            res["erro"] = (ev.get("error") or {}).get("message") or ev.get("message")
+    return res
 
 
 def fetch_result(agent_id, wait):
@@ -132,9 +198,13 @@ def fetch_result(agent_id, wait):
     out = ssh(h, f"docker logs {agent_id} 2>/dev/null; echo; docker inspect -f '{{{{.State.ExitCode}}}}' {agent_id}").stdout
     body, code = out.rstrip().rsplit("\n", 1)
     ssh(h, f"docker rm {agent_id} >/dev/null")         # evaporou (e o token junto)
+    lines = body.strip().splitlines()
     try:
-        res = json.loads(body.strip().splitlines()[-1])
-    except (ValueError, IndexError):
+        res = json.loads(lines[-1])
+        if res.get("type") == "turn.completed" or any('"thread.started"' in l for l in lines[:3]):
+            res = parse_codex(lines)
+        res.setdefault("engine", "claude")
+    except (ValueError, IndexError, AttributeError):
         res = {"raw": body.strip()[-2000:]}
     res.update({"id": agent_id, "host": h, "exit_code": int(code)})
     if int(code) == 124:
@@ -168,7 +238,7 @@ def cmd_ls(a):
 
 
 STATE_CMD = r"""awk '/^MemTotal|^MemAvailable/{print $2}' /proc/meminfo; echo @@
-docker ps -a --filter label=wisp --format '{{.Names}}|{{.Label "wisp.ram"}}|{{.State}}|{{.RunningFor}}'; echo @@
+docker ps -a --filter label=wisp --format '{{.Names}}|{{.Label "wisp.ram"}}|{{.State}}|{{.RunningFor}}|{{.Label "wisp.engine"}}'; echo @@
 ids=$(docker ps -q --filter label=wisp)
 [ -n "$ids" ] && docker stats --no-stream --format '{{.Name}}|{{.MemUsage}}|{{.CPUPerc}}' $ids; true"""
 UNITS = {"B": 1 / 2**20, "KiB": 1 / 1024, "MiB": 1, "GiB": 1024}
@@ -192,9 +262,9 @@ def host_state(h):
     stats = {n: (_mib(m.split("/")[0].strip()), cpu) for n, m, cpu in (l.split("|") for l in stats if l)}
     agents = []
     for line in ps:
-        name, ram, state, age = line.split("|")
+        name, ram, state, age, engine = line.split("|")
         used, cpu = stats.get(name, (0.0, ""))
-        agents.append({"id": name, "ram_gb": int(ram or 0), "state": state, "age": age,
+        agents.append({"id": name, "engine": engine or "claude", "ram_gb": int(ram or 0), "state": state, "age": age,
                        "used_mib": round(used), "cpu": cpu})
     total, avail = (int(x) / 2**20 for x in mem)
     return {"host": h, "ok": True, **cfg, "mem_total_gb": round(total, 1), "mem_avail_gb": round(avail, 1),
@@ -251,6 +321,7 @@ def main():
     sp = s.add_parser("spawn"); sp.add_argument("mission"); sp.add_argument("--ram", type=int, default=2)
     sp.add_argument("--host"); sp.add_argument("--turns", type=int, default=20)
     sp.add_argument("--timeout", type=int, default=1800)
+    sp.add_argument("--engine", choices=sorted(ENGINES), default="claude"); sp.add_argument("--model")
     for c in ("wait", "result", "status", "kill"):
         s.add_parser(c).add_argument("id")
     s.add_parser("ls"); s.add_parser("gc")

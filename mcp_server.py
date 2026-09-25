@@ -10,9 +10,10 @@ WISP = str(Path(__file__).resolve().parent / "wisp")
 PROTOCOLS = {"2024-11-05", "2025-03-26", "2025-06-18"}
 
 INSTRUCTIONS = """\
-wisp roda subagentes Claude efêmeros e isolados em outras máquinas (hoje o optimus), sem gastar RAM desta.
-Cada subagente é um container novo (sem root, raiz só leitura, teto de RAM) que roda `claude -p <missão>`
-com o login do usuário e é apagado quando o resultado é recolhido.
+wisp roda subagentes efêmeros e isolados em outras máquinas (hoje o optimus), sem gastar RAM desta.
+Cada subagente é um container novo (sem root, raiz só leitura, teto de RAM) que roda Claude Code
+(`engine: "claude"`, padrão) ou Codex (`engine: "codex"`) com o login do usuário, e é apagado quando
+o resultado é recolhido. O formato do resultado é o mesmo nos dois (campo result = resposta).
 
 Quando usar: o usuário pede subagente remoto / "roda no wisp" / "sobe N subagentes", ou há tarefas
 independentes e pesadas que podem rodar em paralelo fora daqui.
@@ -30,11 +31,13 @@ Como usar bem:
 
 TOOLS = [
     {"name": "spawn_agent",
-     "description": "Sobe um subagente Claude efêmero num host com RAM livre e devolve o id na hora (não espera).",
+     "description": "Sobe um subagente efêmero (Claude Code ou Codex) num host com RAM livre e devolve o id na hora (não espera).",
      "inputSchema": {"type": "object", "required": ["mission"], "properties": {
          "mission": {"type": "string", "description": "Missão completa e autocontida, com todo o contexto necessário."},
+         "engine": {"type": "string", "enum": ["claude", "codex"], "default": "claude"},
+         "model": {"type": "string", "description": "Modelo do motor escolhido. Omitir = padrão dele."},
          "ram_gb": {"type": "integer", "default": 2, "minimum": 1, "maximum": 16},
-         "max_turns": {"type": "integer", "default": 20},
+         "max_turns": {"type": "integer", "default": 20, "description": "Só vale para claude."},
          "timeout_s": {"type": "integer", "default": 1800, "description": "Tempo máximo da missão."},
          "host": {"type": "string", "description": "Força um host da lista. Omitir = escolha automática."}}}},
     {"name": "wait_agent",
@@ -65,8 +68,9 @@ def call(name, a):
     if name == "spawn_agent":
         args = ["spawn", a["mission"], "--ram", a.get("ram_gb", 2), "--turns", a.get("max_turns", 20),
                 "--timeout", a.get("timeout_s", 1800)]
-        if a.get("host"):
-            args += ["--host", a["host"]]
+        for k in ("host", "engine", "model"):
+            if a.get(k):
+                args += [f"--{k}", a[k]]
         return cli(*args)
     if name == "wait_agent":
         deadline = time.time() + a.get("max_wait_s", 900)

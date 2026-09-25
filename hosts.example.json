@@ -1,0 +1,8 @@
+{
+  "optimus": {
+    "ssh": "optimus",
+    "max_ram_gb": 4,
+    "keep_free_gb": 3,
+    "cpus_per_agent": 2
+  }
+}

@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" width="900" height="400" role="img" aria-label="RAM de um host ao longo do tempo: os agentes só ocupam memória enquanto rodam">
+<defs>
+  <clipPath id="plot"><rect x="70" y="40" width="780" height="290"/></clipPath>
+  <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+    <line x1="0" y1="0" x2="0" y2="8" stroke="var(--reserve)" stroke-width="2" opacity=".45"/></pattern>
+</defs>
+<style>
+  svg { --bg:#ffffff; --fg:#16181d; --muted:#6b7280; --line:#e3e6ec; --accent:#6d5dfc; --other:#b5bac5; --reserve:#d98a00; }
+  @media (prefers-color-scheme: dark) {
+    svg { --bg:#0f1115; --fg:#e8eaf0; --muted:#8b93a3; --line:#262b36; --accent:#8f83ff; --other:#4b5263; --reserve:#f0a93b; }
+  }
+  text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; fill: var(--fg); }
+  .s { font-size: 12px; } .muted { fill: var(--muted); }
+  .anim { animation-duration: 12s; animation-iteration-count: infinite; animation-timing-function: linear; }
+  .sweep { animation-name: sweep; }
+  @keyframes sweep { 0% { transform: translateX(0) } 83.3%, 100% { transform: translateX(780px) } }
+  .c1 { animation-name: k1; } .c2 { animation-name: k2; opacity: 0 } .c3 { animation-name: k3; opacity: 0 }
+  .c4 { animation-name: k4; opacity: 0 } .c5 { animation-name: k5; opacity: 0 }
+  @keyframes k1 { 0%, 15.7% { opacity: 1 } 16.7%, 100% { opacity: 0 } }
+  @keyframes k2 { 0%, 16.7% { opacity: 0 } 17.7%, 28.2% { opacity: 1 } 29.2%, 100% { opacity: 0 } }
+  @keyframes k3 { 0%, 29.2% { opacity: 0 } 30.2%, 49% { opacity: 1 } 50%, 100% { opacity: 0 } }
+  @keyframes k4 { 0%, 50% { opacity: 0 } 51%, 69.8% { opacity: 1 } 70.8%, 100% { opacity: 0 } }
+  @keyframes k5 { 0%, 70.8% { opacity: 0 } 71.8%, 99% { opacity: 1 } 100% { opacity: 0 } }
+</style>
+<rect width="900" height="400" rx="16" fill="var(--bg)"/>
+<text x="24" y="28" style="font-size:17px;font-weight:600">RAM de um host ao longo do tempo</text>
+
+<!-- grade: 0..16 GB em y 230..50 (11,25 px/GB) -->
+<g stroke="var(--line)"><line x1="70" y1="230" x2="850" y2="230"/><line x1="70" y1="185" x2="850" y2="185"/>
+  <line x1="70" y1="140" x2="850" y2="140"/><line x1="70" y1="95" x2="850" y2="95"/><line x1="70" y1="50" x2="850" y2="50"/></g>
+<g class="s muted" text-anchor="end"><text x="62" y="234">0</text><text x="62" y="189">4 GB</text><text x="62" y="144">8 GB</text>
+  <text x="62" y="99">12 GB</text><text x="62" y="54">16 GB</text></g>
+
+<!-- dados (revelados pela cortina) -->
+<rect x="70" y="54.5" width="780" height="33.75" fill="url(#hatch)"/>
+<line x1="70" y1="54.5" x2="850" y2="54.5" stroke="var(--fg)" stroke-width="1.2" opacity=".6"/>
+<rect x="70" y="162.5" width="780" height="67.5" fill="var(--other)" opacity=".75"/>
+<path d="M226,162.5 V159.7 H343 V156.3 H460 V146.2 H538 V149 H616 V156.9 H733 V162.5 Z" fill="var(--accent)"/>
+
+<!-- faixa de baixo: cota reservada (tetos), 0..4 GB em y 322..262 -->
+<text x="62" y="266" class="s muted" text-anchor="end">4 GB</text><text x="62" y="326" class="s muted" text-anchor="end">0</text>
+<line x1="70" y1="322" x2="850" y2="322" stroke="var(--line)"/>
+<line x1="70" y1="262" x2="850" y2="262" stroke="var(--accent)" stroke-dasharray="5 5" opacity=".6"/>
+<path d="M226,322 V307 H343 V277 H538 V292 H733 V322 Z" fill="var(--accent)" fill-opacity=".25" stroke="var(--accent)" stroke-width="1.5"/>
+
+<!-- cortina + cursor -->
+<g clip-path="url(#plot)"><g class="anim sweep">
+  <rect x="70" y="40" width="800" height="290" fill="var(--bg)"/>
+  <line x1="70" y1="44" x2="70" y2="326" stroke="var(--fg)" stroke-width="1.5" stroke-dasharray="3 3"/>
+</g></g>
+
+<!-- rótulos por cima -->
+<text x="80" y="75" class="s" style="fill:var(--reserve);font-weight:600">reserva: sempre livre para a máquina (keep_free 3 GB)</text>
+<text x="846" y="47" class="s muted" text-anchor="end">RAM total 15,6 GB</text>
+<text x="80" y="201" class="s" style="font-weight:600">outros processos (WAHA etc.)</text>
+<text x="80" y="256" class="s" style="fill:var(--accent);font-weight:600">cota do wisp reservada (soma dos tetos) · máx. 4 GB</text>
+
+<!-- legenda -->
+<g transform="translate(70 352)">
+  <rect width="10" height="10" rx="2" fill="var(--other)"/><text x="16" y="9.5" class="s muted">outros</text>
+  <rect x="80" width="10" height="10" rx="2" fill="var(--accent)"/><text x="96" y="9.5" class="s muted">uso real dos agentes</text>
+  <rect x="236" width="10" height="10" rx="2" fill="var(--accent)" fill-opacity=".25" stroke="var(--accent)"/><text x="252" y="9.5" class="s muted">teto reservado</text>
+  <rect x="362" width="10" height="10" rx="2" fill="url(#hatch)" stroke="var(--reserve)"/><text x="378" y="9.5" class="s muted">reserva</text>
+</g>
+
+<!-- narração -->
+<g style="font-size:14.5px" text-anchor="middle">
+  <text x="450" y="386" class="anim c1">sem agente rodando, o wisp ocupa 0 de RAM: não existe container nenhum</text>
+  <text x="450" y="386" class="anim c2">agente A sobe: reserva 1 GB na cota, mas usa ~250 MB</text>
+  <text x="450" y="386" class="anim c3">agente B (build pesado) sobe: teto 2 GB, uso real varia com o trabalho</text>
+  <text x="450" y="386" class="anim c4">A termina: o container é apagado e a memória volta na hora</text>
+  <text x="450" y="386" class="anim c5">B termina: tudo volta ao normal, e a reserva nunca foi tocada</text>
+</g>
+</svg>

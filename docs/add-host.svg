@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 360" width="900" height="360" role="img" aria-label="Adicionar um host ao wisp em três passos">
+<style>
+  svg { --bg:#ffffff; --card:#f6f7f9; --fg:#16181d; --muted:#6b7280; --line:#d9dce3; --accent:#6d5dfc; --soft:#ece9ff; --mint:#0f9f6e; }
+  @media (prefers-color-scheme: dark) {
+    svg { --bg:#0f1115; --card:#171a21; --fg:#e8eaf0; --muted:#8b93a3; --line:#2c3240; --accent:#8f83ff; --soft:#25224a; --mint:#3ccf9a; }
+  }
+  text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; fill: var(--fg); }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+  .s { font-size: 12px; } .muted { fill: var(--muted); } .t { font-weight: 600; font-size: 15px; }
+  .card { fill: var(--card); stroke: var(--line); }
+  .anim { animation-duration: 10s; animation-iteration-count: infinite; animation-timing-function: ease-out; opacity: 0; }
+  .d1 { animation-name: d1; } .d2 { animation-name: d2; } .d3 { animation-name: d3; }
+  @keyframes d1 { 0%, 12% { opacity: 0 } 16%, 96% { opacity: 1 } 100% { opacity: 0 } }
+  @keyframes d2 { 0%, 30% { opacity: 0 } 34%, 96% { opacity: 1 } 100% { opacity: 0 } }
+  @keyframes d3 { 0%, 48% { opacity: 0 } 52%, 96% { opacity: 1 } 100% { opacity: 0 } }
+  .host { animation-name: host; }
+  @keyframes host { 0%, 56% { opacity: 0 } 62%, 96% { opacity: 1 } 100% { opacity: 0 } }
+  .wire { animation-name: wire; opacity: 1; stroke-dasharray: 400; stroke-dashoffset: 400; }
+  @keyframes wire { 0%, 62% { stroke-dashoffset: 400 } 74%, 100% { stroke-dashoffset: 0 } }
+  .wisp { animation-name: wisp; }
+  @keyframes wisp { 0%, 76% { opacity: 0; transform: translate(0, 0) } 78% { opacity: 1 }
+                    90% { opacity: 1; transform: translate(380px, 52px) } 93%, 100% { opacity: 0; transform: translate(380px, 52px) } }
+  .cap0 { animation-name: cap0; opacity: 1 } .cap1 { animation-name: cap1; }
+  @keyframes cap0 { 0%, 74% { opacity: 1 } 76%, 100% { opacity: 0 } }
+  @keyframes cap1 { 0%, 75% { opacity: 0 } 77%, 97% { opacity: 1 } 100% { opacity: 0 } }
+</style>
+<rect width="900" height="360" rx="16" fill="var(--bg)"/>
+<text x="24" y="34" class="t" style="font-size:17px">Adicionar um host: 3 passos, sem instalar serviço nenhum</text>
+
+<!-- passos -->
+<g>
+  <rect x="24" y="54" width="272" height="52" rx="10" class="card"/>
+  <rect x="24" y="54" width="272" height="52" rx="10" fill="var(--soft)" stroke="var(--accent)" class="anim d1"/>
+  <text x="40" y="76" class="s muted">no PC novo</text><text x="40" y="95" class="mono">docker build -t wisp-agent</text>
+  <g class="anim d1"><circle cx="274" cy="80" r="10" fill="var(--mint)"/><path d="M269 80 l3.5 3.5 l6-7" fill="none" stroke="#fff" stroke-width="2.2"/></g>
+
+  <rect x="314" y="54" width="272" height="52" rx="10" class="card"/>
+  <rect x="314" y="54" width="272" height="52" rx="10" fill="var(--soft)" stroke="var(--accent)" class="anim d2"/>
+  <text x="330" y="76" class="s muted">neste computador</text><text x="330" y="95" class="mono">alias no ~/.ssh/config</text>
+  <g class="anim d2"><circle cx="564" cy="80" r="10" fill="var(--mint)"/><path d="M559 80 l3.5 3.5 l6-7" fill="none" stroke="#fff" stroke-width="2.2"/></g>
+
+  <rect x="604" y="54" width="272" height="52" rx="10" class="card"/>
+  <rect x="604" y="54" width="272" height="52" rx="10" fill="var(--soft)" stroke="var(--accent)" class="anim d3"/>
+  <text x="620" y="76" class="s muted">neste computador</text><text x="620" y="95" class="mono">"outro-pc" no hosts.json</text>
+  <g class="anim d3"><circle cx="854" cy="80" r="10" fill="var(--mint)"/><path d="M849 80 l3.5 3.5 l6-7" fill="none" stroke="#fff" stroke-width="2.2"/></g>
+</g>
+
+<!-- diagrama -->
+<rect x="24" y="150" width="240" height="110" rx="14" class="card"/>
+<text x="44" y="180" class="t">Seu computador</text>
+<text x="44" y="200" class="s muted">controlador</text>
+<text x="44" y="232" class="mono">wisp ls · dash · spawn</text>
+
+<line x1="264" y1="205" x2="644" y2="162" stroke="var(--accent)" stroke-width="2"/>
+<rect x="644" y="130" width="232" height="64" rx="12" class="card"/>
+<text x="664" y="157" class="t">optimus</text><text x="664" y="178" class="s muted">4 GB de cota · já existia</text>
+
+<line x1="264" y1="205" x2="644" y2="258" stroke="var(--accent)" stroke-width="2" class="anim wire"/>
+<g class="anim host">
+  <rect x="644" y="226" width="232" height="64" rx="12" fill="var(--soft)" stroke="var(--accent)" stroke-width="1.5"/>
+  <text x="664" y="253" class="t">outro-pc</text><text x="664" y="274" class="s muted">8 GB de cota · novo</text>
+</g>
+<g class="anim wisp"><circle cx="264" cy="205" r="8" fill="var(--accent)"/><circle cx="264" cy="205" r="14" fill="var(--accent)" opacity=".25"/></g>
+
+<g text-anchor="middle" style="font-size:15px">
+  <text x="450" y="332" class="anim cap0">o host não roda nada do wisp: só Docker e a imagem, que ocupa disco, não RAM</text>
+  <text x="450" y="332" class="anim cap1">pronto: o próximo spawn já pode cair no outro-pc</text>
+</g>
+</svg>
